@@ -1,0 +1,22 @@
+- hosts: k8s-all
+  remote_user: root
+  vars: 
+     docker_version: 18.09.2
+
+  tasks: 
+     - name: install dependencies
+       #shell: yum install -y yum-utils device-mapper-persistent-data lvm2 
+       yum: name={{item}} state=present
+       with_items:
+          - yum-utils
+          - device-mapper-persistent-data
+          - lvm2
+
+     - name: config yum repo
+       shell: yum-config-manager --add-repo https://mirrors.ustc.edu.cn/docker-ce/linux/centos/docker-ce.repo
+
+     - name: install docker
+       yum: name=docker-ce-{{docker_version}} state=present
+
+     - name: start docker
+       shell: systemctl enable docker && systemctl start docker

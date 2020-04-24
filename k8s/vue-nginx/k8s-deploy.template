@@ -1,0 +1,22 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: {APP_NAME}-{ENV}
+  namespace: default
+  labels:
+    k8s-app: {APP_NAME}-{ENV}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {APP_NAME}-{ENV}
+  template:
+    metadata:
+      labels:
+        app: {APP_NAME}-{ENV}
+    spec:
+      containers:
+      - name: {APP_NAME}-{ENV}
+        image: {IMAGE_URL}:{IMAGE_TAG}
+        ports:
+        - containerPort: 80

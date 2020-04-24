@@ -1,0 +1,10 @@
+---
+- hosts: k8s-all
+  remote_user: root
+  
+  tasks:
+    - name: backup /etc/hosts
+      shell: mv /etc/hosts /etc/hosts_bak
+
+    - name: copy local hosts file to remote
+      copy: src=/etc/hosts dest=/etc/ owner=root group=root mode=0644 

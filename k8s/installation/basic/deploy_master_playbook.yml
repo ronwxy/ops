@@ -1,0 +1,37 @@
+- hosts: k8s-master
+  remote_user: root
+  vars:
+    kube_version: 1.16.0-0
+    k8s_version: v1.16.0
+    k8s_master: 192.168.40.111 
+  
+  tasks:
+    - name: prepare env
+      script: ./pre-setup.sh      
+
+    - name: install kubectl,kubeadm,kubelet
+      yum: name={{item}} state=present
+      with_items:
+        - kubectl-{{kube_version}}
+        - kubeadm-{{kube_version}}
+        - kubelet-{{kube_version}}
+    
+    - name: init k8s
+      shell: kubeadm init --image-repository registry.aliyuncs.com/google_containers --kubernetes-version {{k8s_version}} --apiserver-advertise-address {{k8s_master}}  --pod-network-cidr=10.244.0.0/16 --token-ttl 0
+    
+    - name: config kube
+      shell: mkdir -p $HOME/.kube && cp -i /etc/kubernetes/admin.conf $HOME/.kube/config && chown $(id -u):$(id -g) $HOME/.kube/config
+    
+    - name: copy flannel yaml file
+      copy: src=./kube-flannel.yml dest=/tmp/ owner=root group=root mode=0644 
+    
+    - name: install flannel
+      shell: kubectl apply -f /tmp/kube-flannel.yml
+
+
+    - name: get join command
+      shell: kubeadm token create --print-join-command 
+      register: join_command
+    - name: show join command
+      debug: var=join_command verbosity=0
+

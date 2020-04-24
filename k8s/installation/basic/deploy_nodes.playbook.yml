@@ -1,0 +1,20 @@
+- hosts: k8s-nodes
+  remote_user: root
+  vars:
+     kube_version: 1.16.0-0
+
+  tasks:
+    - name: prepare env
+      script: ./pre-setup.sh
+
+    - name: install kubeadm,kubelet
+      yum: name={{item}} state=present
+      with_items:
+        - kubeadm-{{kube_version}}
+        - kubelet-{{kube_version}}
+    
+    - name: start kubelt
+      shell: systemctl enable kubelet && systemctl start kubelet
+   
+    - name: join cluster
+      shell: kubeadm join 192.168.40.111:6443 --token zgx3ov.zlq3jh12atw1zh8r     --discovery-token-ca-cert-hash sha256:60b7c62687974ec5803e0b69cfc7ccc2c4a8236e59c8e8b8a67f726358863fa7
