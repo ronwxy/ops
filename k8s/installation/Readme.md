@@ -25,7 +25,7 @@
 192.168.40.114 knode3
 ```
 
-2. 在Ansible服务器上的/etc/ansible/hosts文件中添加k8s服务器节点（参考）
+2. 在Ansible服务器上的/etc/ansible/hosts文件中添加k8s服务器节点（参考[hosts](./basic/hosts)）
 
 ```shell
 [k8s-all]
