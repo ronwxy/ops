@@ -1,22 +1,26 @@
-## 准备服务器节点
+# 采用Ansible安装K8s
 
-如果还没有服务器，可以参考[ubuntu18.04上搭建KVM虚拟机环境超完整过程](http://blog.jboost.cn/ubuntu-kvm.html)创建服务器。
+## 一. 准备服务器节点
+
+如果还没有服务器，可以参考 [ubuntu18.04上搭建KVM虚拟机环境超完整过程](http://blog.jboost.cn/ubuntu-kvm.html) 创建虚拟服务器。
 
 服务器节点IP（hostname）：
-192.168.40.111 (kmaster)
-192.168.40.112 (knode1)
-192.168.40.113 (knode2)
-192.168.40.114 (knode3)
+
+- 192.168.40.111 (kmaster)
+- 192.168.40.112 (knode1)
+- 192.168.40.113 (knode2)
+- 192.168.40.114 (knode3)
 
 操作系统版本：
-`cat /etc/redhat-release` : CentOS Linux release 7.6.1810 (Core)
-`uname -a` : 3.10.0-957.el7.x86_64
 
-## 配置Ansible
+* `cat /etc/redhat-release` : CentOS Linux release 7.6.1810 (Core)
+* `uname -a` : 3.10.0-957.el7.x86_64
 
-如果还没有Ansible环境，可以参考[Ansible简明教程](http://blog.jboost.cn/ansible.html)搭建。
+## 二. 配置Ansible
 
-1. 在Ansible服务器上的/etc/hosts文件中添加k8s服务器节点信息(参考)
+如果还没有Ansible环境，可以参考 [Ansible简明教程](http://blog.jboost.cn/ansible.html) 搭建。
+
+1. 在Ansible服务器上的/etc/hosts文件中添加k8s服务器节点信息(参考 [hosts](./basic/hosts))
 
 ```shell
 192.168.40.111 kmaster
@@ -25,7 +29,7 @@
 192.168.40.114 knode3
 ```
 
-2. 在Ansible服务器上的/etc/ansible/hosts文件中添加k8s服务器节点（参考）
+2. 在Ansible服务器上的/etc/ansible/hosts文件中添加k8s服务器节点（参考 [ansible_hosts](./basic/ansible_hosts)）
 
 ```shell
 [k8s-all]
@@ -43,11 +47,11 @@ knode2
 knode3
 ```
 
-## 修改k8s集群各节点/etc/hosts（非必须）
+## 三. 修改k8s集群各节点/etc/hosts（非必须）
 
 修改所有主机/etc/hosts文件，添加IP/主机名映射，方便通过主机名ssh访问
 
-1. 创建playbook文件
+1. 创建playbook文件（参考 [set_hosts_playbook.yml](./basic/set_hosts_playbook.yml)）
 
 ```shell
 vim set_hosts_playbook.yml
@@ -70,11 +74,11 @@ ansible-playbook set_hosts_playbook.yml
 ```
 
 
-## 安装Docker
+## 四. 安装Docker
 
 在所有主机上安装Docker
 
-1. 创建playbook文件
+1. 创建playbook文件（参考 [install_docker_playbook.yml](./basic/install_docker_playbook.yml)）
 
 ```shell
 vim install_docker_playbook.yml
@@ -109,11 +113,11 @@ ansible-playbook install_docker_playbook.yml
 ```
 
 
-## 部署k8s master
+## 五. 部署k8s master
 
-1. 开始部署之前，需要做一些初始化处理：关闭防火墙、关闭selinux、禁用swap、配置k8s阿里云yum源等，所有操作放在脚本pre-setup.sh中，并在2中playbook中通过script模块执行
+1. 开始部署之前，需要做一些初始化处理：关闭防火墙、关闭selinux、禁用swap、配置k8s阿里云yum源等，所有操作放在脚本 [pre-setup.sh](./basic/pre-setup.sh) 中，并在2中playbook中通过script模块执行
 
-2. 创建playbook文件deploy_master_playbook.yml，只针对master节点，安装kubectl，kubeadm，kubelet，以及flannel（将kube-flannel.yml文件里镜像地址的quay.io改为quay-mirror.qiniu.com避免超时）
+2. 创建playbook文件 [deploy_master_playbook.yml](./basic/deploy_master_playbook.yml)，只针对master节点，安装kubectl，kubeadm，kubelet，以及flannel（将kube-flannel.yml文件里镜像地址的quay.io改为quay-mirror.qiniu.com避免超时，参考 [kube-flannel.yml](./basic/kube-flannel.yml)）
 
 ```shell
 vim deploy_master_playbook.yml
@@ -160,15 +164,16 @@ vim deploy_master_playbook.yml
 ansible-playbook deploy_master_playbook.yml
 ```
 
-4. 上述命令执行完成会输出节点加入k8s集群的命令，如下图。记下该命令，后面部署node会用到
+4. 上述命令执行完成会输出节点加入k8s集群的命令，如下图。记下该命令，后面部署node时会用到
 
-![图片]()
+![图片](./basic/join-command.png)
 
-## 部署k8s node
 
-1. 同master一样，开始部署之前，需要做一些初始化处理：关闭防火墙、关闭selinux、禁用swap、配置k8s阿里云yum源等，所有操作放在脚本pre-setup.sh中，并在2中playbook中通过script模块执行
+## 六. 部署k8s node
 
-2. 创建playbook文件deploy_nodes_playbook.yml，针对除master外的其它集群节点，安装kubeadm，kubelet，并将节点加入到k8s集群中，使用的是前面部署master时输出的加入集群命令
+1. 同master一样，开始部署之前，需要做一些初始化处理：关闭防火墙、关闭selinux、禁用swap、配置k8s阿里云yum源等，所有操作放在脚本  [pre-setup.sh](./basic/pre-setup.sh) 中，并在2中playbook中通过script模块执行
+
+2. 创建playbook文件 [deploy_nodes_playbook.yml](./basic/deploy_nodes_playbook.yml)，针对除master外的其它集群节点，安装kubeadm，kubelet，并将节点加入到k8s集群中，使用的是前面部署master时输出的加入集群命令
 
 ```shell
 vim deploy_nodes_playbook.yml
