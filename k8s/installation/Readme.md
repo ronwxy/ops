@@ -216,77 +216,20 @@ knode2    Ready    <none>   7m1s    v1.16.0
 knode3    Ready    <none>   4m12s   v1.16.0
 ```
 
-至此，k8s集群基本部署完成。接下来可安装ingress。
-
-## 安装Kubernetes Dashboard
-
-1. 下载yaml文件（此目录已包含kubernetes-dashboard.yaml文件，可直接进入第3步）
-
-```shell
-wget -O kubernetes-dashboard.yaml  https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0-beta5/aio/deploy/recommended.yaml
-```
-
-2. 部署
-
-3. 创建admin-user
-默认的kubernetes-dashboard service account权限有限，
+至此，k8s集群基本部署完成。接下来可安装Ingress与Dashboard。
 
 
-kubectl apply -f auth.yaml
+## 七. 安装Ingress
 
-获取token
+Ingress为集群内服务提供外网访问，包括基于Nginx与Traefik两个版本，这里使用比较熟悉的Nginx版本。安装Ingress的操作在master节点进行（因为前面在master节点安装并配置了kubectl，也可在其它安装并配置好了kubectl的节点进行）
 
-[root@kmaster k8s-deploy]# kubectl -n kubernetes-dashboard describe secret $(kubectl -n kubernetes-dashboard get secret | grep admin-user | awk '{print $1}')
-
-2. 修改kubernetes-dashboard.yaml，并部署kubernetes dashboard
-
-将Service type改为NodePort，去掉默认的Secret
-
-
-3. 创建自定义签名 
-
-```shell
-#创建自签名证书
-
-[root@kmaster ~]# cd /etc/kubernetes/pki/
-#生成私钥
-[root@kmaster pki]# openssl genrsa -out dashboard.key 2048
-#生成证书
-[root@kmaster pki]# openssl req -new -key dashboard.key -out dashboard.csr -subj "/O=JBST/CN=kubernetes-dashboard"
-#使用集群的CA来签署证书
-[root@kmaster pki]# openssl x509 -req -in dashboard.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out dashboard.crt -days 3650
-#查看自创证书
-[root@kmaster pki]# openssl x509 -in dashboard.crt -noout -text
-```
-
-注释默认的Secret
-
-```shell
-[root@kmaster k8s-deploy]# kubectl delete -f kubernetes-dashboard.yaml
-[root@kmaster k8s-deploy]# kubectl apply -f kubernetes-dashboard.yaml 
-[root@kmaster k8s-deploy]# kubectl create secret generic kubernetes-dashboard-certs --from-file=dashboard.crt=/etc/kubernetes/pki/dashboard.crt --from-file=dashboard.key=/etc/kubernetes/pki/dashboard.key  -n kubernetes-dashboard
-```
-
-4. 访问
-
-```shell
-[root@kmaster k8s-deploy]# kubectl get pods  -n kubernetes-dashboard -o wide
-NAME                                         READY   STATUS    RESTARTS   AGE     IP           NODE     NOMINATED NODE   READINESS GATES
-dashboard-metrics-scraper-76585494d8-zg4k9   1/1     Running   0          2m13s   10.244.1.4   knode2   <none>           <none>
-kubernetes-dashboard-6b86b44f87-xwrsl        1/1     Running   0          2m13s   10.244.3.5   knode3   <none>           <none>
-```
-
-## 安装Ingress
-
-安装Ingress的操作在master节点进行（因为前面在master节点安装并配置了kubectl，也可在其它安装并配置好了kubectl的节点进行）
-
-1. 下载yaml文件（此目录已包含nginx-ingress.yaml，可直接进入第3步） 
+1. 下载yaml文件（此目录已包含 [nginx-ingress.yaml](./ingress/nginx-ingress.yaml)，并修改了镜像地址，可直接进入第3步） 
 
 ```shell
 wget -O nginx-ingress.yaml https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/provider/baremetal/deploy.yaml
 ```
 
-2. 将里面的quay.io修改为quay-mirror.qiniu.com，避免镜像拉取超时。同时在nginx-ingress-controller的Deployment上添加hostNetwork为true及nginx-ingress的标签，以使用宿主机网络与控制ingress部署的节点
+2. 将里面的quay.io修改为quay-mirror.qiniu.com，避免镜像拉取超时。同时在nginx-ingress-controller的Deployment上添加hostNetwork为true及nginx-ingress的标签，以使用宿主机网络与控制Ingress部署的节点
 
 ```shell
 vim nginx-ingress.yaml
@@ -301,14 +244,17 @@ vim nginx-ingress.yaml
         nginx-ingress: "true"
 ```
 
-在knode1节点上打标签nginx-ingress=true，控制ingress部署到knode1上，保持IP固定。
+
+3. 部署Ingress
+
+首先在knode1节点上打标签nginx-ingress=true，控制Ingress部署到knode1上，保持IP固定。
 
 ```shell
 [root@kmaster k8s-deploy]# kubectl label node knode1 nginx-ingress=true
 node/knode1 labeled
 ```
 
-3. 部署Ingress
+然后完成nginx-ingress的部署
 
 ```shell
 kubectl apply -f nginx-ingress.yaml
@@ -324,7 +270,117 @@ ingress-nginx-admission-patch-db2rt         0/1     Completed   1          79m  
 ingress-nginx-controller-575cffb49c-4xm55   1/1     Running     0          79m   192.168.40.112   knode1   <none>           <none>
 ```
 
+## 八. 安装Kubernetes Dashboard
 
-## 通过docker凭证创建Secret
+1. 下载yaml文件（此目录已包含 [kubernetes-dashboard.yaml](./dashboard/kubernetes-dashboard.yaml) 文件，可直接进入第3步）
 
-kubectl create secret generic cnbot-aliyun-registry --from-file=.dockerconfigjson=/root/k8s-deploy/config.json  --type=kubernetes.io/dockerconfigjson
+```shell
+wget -O kubernetes-dashboard.yaml  https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0-beta5/aio/deploy/recommended.yaml
+```
+
+2. 修改kubernetes-dashboard.yaml
+
+将Service type改为NodePort，使得可通过IP访问Dashboard。注释掉默认的Secret（默认的secret权限很有限，看不到多少数据）
+
+```yaml
+kind: Service
+apiVersion: v1
+metadata:
+  labels:
+    k8s-app: kubernetes-dashboard
+  name: kubernetes-dashboard
+  namespace: kubernetes-dashboard
+spec:
+  type: NodePort
+  ports:
+    - port: 443
+      targetPort: 8443
+      nodePort: 30443
+  selector:
+    k8s-app: kubernetes-dashboard
+```
+
+3. 部署Dashboard，并创建绑定cluster-admin角色的ServiceAccount —— admin-user (参考 [auth.yaml](./dashboard/kubernetes-dashboard-auth.yaml))
+
+```shell
+kubectl apply -f kubernetes-dashboard.yaml
+kubectl apply -f kubernetes-dashboard-auth.yaml
+```
+
+4. 访问Dashboard
+
+访问 https://集群任意节点IP:30443，打开Dashboard登录页面，执行如下命令获取登录token
+
+```shell
+kubectl -n kubernetes-dashboard describe secret $(kubectl -n kubernetes-dashboard get secret | grep admin-user | awk '{print $1}')
+```
+
+使用token完成登录，如图
+
+![图片](./dashboard/dashboard-login.png)
+
+
+
+## 九. 解决证书无效问题
+
+安装完后，默认的证书可能无效，在Chrome浏览中无法打开Dashboard，可通过重新生成证书解决。
+
+1. 创建自定义证书 
+
+```shell
+[root@kmaster ~]# cd /etc/kubernetes/pki/
+#生成私钥
+[root@kmaster pki]# openssl genrsa -out dashboard.key 2048
+#生成证书
+[root@kmaster pki]# openssl req -new -key dashboard.key -out dashboard.csr -subj "/O=JBST/CN=kubernetes-dashboard"
+#使用集群的CA来签署证书
+[root@kmaster pki]# openssl x509 -req -in dashboard.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out dashboard.crt -days 3650
+#查看自创证书
+[root@kmaster pki]# openssl x509 -in dashboard.crt -noout -text
+```
+
+注释 [kubernetes-dashboard.yaml](./dashboard/kubernetes-dashboard.yaml) 中默认的Secret，
+
+```yaml
+#---
+#
+#apiVersion: v1
+#kind: Secret
+#metadata:
+#  labels:
+#    k8s-app: kubernetes-dashboard
+#  name: kubernetes-dashboard-certs
+#  namespace: kubernetes-dashboard
+#type: Opaque
+```
+
+重新部署Dashboard，并通过自定义证书创建新的Secret
+
+```shell
+[root@kmaster k8s-deploy]# kubectl delete -f kubernetes-dashboard.yaml
+[root@kmaster k8s-deploy]# kubectl apply -f kubernetes-dashboard.yaml 
+[root@kmaster k8s-deploy]# kubectl create secret generic kubernetes-dashboard-certs --from-file=dashboard.crt=/etc/kubernetes/pki/dashboard.crt --from-file=dashboard.key=/etc/kubernetes/pki/dashboard.key  -n kubernetes-dashboard
+```
+
+## 十. 在本地（win10）管理k8s集群
+
+1. 下载kubectl windows版本： https://storage.googleapis.com/kubernetes-release/release/v1.16.0/bin/windows/amd64/kubectl.exe
+
+2. 将kubectl.exe文件所在目录加入系统环境变量的Path中
+
+3. 将master节点上 /etc/kubernetes/admin.conf 的内容拷贝到本地用户目录的 .kube/config 文件中，如 `C:\Users\Administrator\.kube\config`
+
+4. 验证
+
+```shell
+C:\Users\Administrator>kubectl get nodes
+NAME      STATUS   ROLES    AGE     VERSION
+kmaster   Ready    master   4d19h   v1.16.0
+knode1    Ready    <none>   4d19h   v1.16.0
+knode2    Ready    <none>   4d19h   v1.16.0
+knode3    Ready    <none>   4d19h   v1.16.0
+```
+
+
+
+
