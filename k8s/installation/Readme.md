@@ -381,6 +381,9 @@ knode2    Ready    <none>   4d19h   v1.16.0
 knode3    Ready    <none>   4d19h   v1.16.0
 ```
 
+---
 
-
+作者：空山新雨 
+欢迎关注作者微信公众号：空山新雨的技术空间，一起学习成长  
+![微信公众号](/assets/qrcode-05.jpg)
 
