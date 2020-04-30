@@ -1,0 +1,79 @@
+pipeline {
+    agent any
+    environment {
+        GIT_REPO = "${env.gitlabSourceRepoName}"
+        GIT_BRANCH = "develop"
+        DOCKER_REGISTER_CREDS = credentials('aliyun-docker-repo-creds')
+        KUBE_CONFIG = credentials('local-k8s-kube-config')
+
+        DOCKER_REGISTER = "registry.cn-hangzhou.aliyuncs.com"
+        DOCKER_NAMESPACE = "xxx"
+        DOCKER_IMAGE = "${DOCKER_REGISTER}/${DOCKER_NAMESPACE}/${GIT_REPO}"
+        INGRESS_HOST = "xxx"
+        INGRESS_PATH = "/xxx"
+        REPLICA_COUNT = "1"
+    }
+    parameters {
+        string(name: 'DOCKER_REGISTER', defaultValue: 'registry.cn-hangzhou.aliyuncs.com', description: 'Docker镜像仓库地址')
+        string(name: 'DOCKER_IMAGE', defaultValue: 'demo/pipeline-demo', description: 'Docker镜像名')
+        string(name: 'APP_NAME', defaultValue: 'pipeline-demo', description: 'K8s中的标签名')
+        string(name: 'K8S_NAMESPACE', defaultValue: 'default', description: 'K8s的namespace名称')
+    }
+    stages {
+        stage('Code Analyze') {
+            agent any
+            steps {
+               echo "1. 代码静态检查"
+            }
+        }
+        stage('Maven Build') {
+            agent {
+                docker {
+                    image 'maven:3-jdk-8-alpine'
+                    args '-v $HOME/.m2:/root/.m2'
+                }
+            }
+            steps {
+                echo "2. 代码编译打包"
+                sh 'mvn clean package -Dfile.encoding=UTF-8 -DskipTests=true'
+                stash includes: 'target/*.jar', name: 'app_jar'
+            }
+
+        }
+        stage('Docker Build') {
+            agent any
+            steps {
+                echo "3. 构建Docker镜像"
+                echo "${DOCKER_IMAGE}   ---  ${GIT_BRANCH}"
+                unstash 'app_jar'
+                sh "sudo docker login -u ${DOCKER_REGISTER_CREDS_USR} -p ${DOCKER_REGISTER_CREDS_PSW} ${DOCKER_REGISTER}"
+                script {
+                    def branch = "develop"
+                    if (env.gitlabTargetBranch == "origin/pre-release") {
+                        branch = "pre-release"
+                    }
+                    sh "docker build -t ${DOCKER_IMAGE}:$branch ."
+                    sh "sudo docker push ${DOCKER_IMAGE}:$branch"
+                    sh "docker rmi ${DOCKER_IMAGE}:$branch"
+                }
+
+            }
+
+        }
+        stage('Helm Deploy') {
+            agent {
+                docker {
+                    image 'dtzar/helm-kubectl'
+                }
+            }
+            steps {
+                echo "4. 部署到K8s"
+                sh "mkdir -p /root/.kube"
+                sh "echo ${KUBE_CONFIG} | base64 -d > /root/.kube/config"
+                sh "helm upgrade -i --set replicaCount=${REPLICA_COUNT} --set image.repository=${DOCKER_IMAGE} --set image.tag=${GIT_BRANCH} --set nameOverride=${GIT_REPO}-${GIT_BRANCH} --set ingress.hosts[0].host=${INGRESS_HOST} --set ingress.hosts[0].paths=[\"${INGRESS_PATH}\"] ${GIT_REPO}-${GIT_BRANCH} ./helm/"
+            }
+
+        }
+
+    }
+}
