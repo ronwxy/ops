@@ -16,7 +16,7 @@ nameOverride: ""
 fullnameOverride: ""
 
 container:
-  port: 8000  #替换为您应用的端口
+  port: 80  #替换为您应用的端口
   env: []
 
 serviceAccount:
@@ -43,7 +43,7 @@ securityContext: {}
 
 service:
   type: NodePort
-  port: 8000 #替换为您应用的端口
+  port: 80 #替换为您应用的端口
 
 ingress:
   enabled: true

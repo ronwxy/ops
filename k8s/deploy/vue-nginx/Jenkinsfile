@@ -29,17 +29,18 @@ pipeline {
                echo "1. 代码静态检查"
             }
         }
-        stage('Maven Build') {
+        stage('Npm Build') {
             agent {
                 docker {
-                    image 'maven:3-jdk-8-alpine'
-                    args '-v $HOME/.m2:/root/.m2'
+                    image 'mhart/alpine-node:12'
+                    args '-u root:root'
                 }
             }
             steps {
                 echo "2. 代码编译打包"
-                sh 'mvn clean package -Dfile.encoding=UTF-8 -DskipTests=true'
+                sh 'npm config set registry http://registry.npm.taobao.org/ && npm install && npm run build'
             }
+
         }
         stage('Docker Build') {
             agent any
@@ -49,19 +50,16 @@ pipeline {
                 //登录Docker仓库
                 sh "sudo docker login -u ${DOCKER_REGISTER_CREDS_USR} -p ${DOCKER_REGISTER_CREDS_PSW} ${DOCKER_REGISTRY}"
                 script {
-                    def profile = "dev"
                     if (env.gitlabTargetBranch == "develop") {
                         image_tag = "dev." + env.GIT_TAG
                     } else if (env.gitlabTargetBranch == "pre-release") {
                         image_tag = "test." + env.GIT_TAG
-                        profile = "test"
                     } else if (env.gitlabTargetBranch == "master"){
                         // master分支则直接使用Tag
                         image_tag = env.GIT_TAG
-                        profile = "prod"
                     }
                     //通过--build-arg将profile进行设置，以区分不同环境进行镜像构建
-                    sh "docker build  --build-arg profile=${profile} -t ${DOCKER_IMAGE}:${image_tag} ."
+                    sh "docker build -t ${DOCKER_IMAGE}:${image_tag} ."
                     sh "sudo docker push ${DOCKER_IMAGE}:${image_tag}"
                     sh "docker rmi ${DOCKER_IMAGE}:${image_tag}"
                 }
